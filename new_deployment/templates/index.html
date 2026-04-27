@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>P653 — Diabetic Retinopathy Prediction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,700;9..144,800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+/* ── TOKENS ─────────────────────────────────────────────────── */
+:root{
+  --void:#04040a;--deep:#080810;--surface:#0e0e1a;
+  --glass:rgba(255,255,255,0.035);
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --crimson:#e8193c;--crimson2:#ff4060;
+  --gold:#f0a500;--gold2:#ffc940;
+  --mint:#00c896;--mint2:#00f0b0;--ice:#4da6ff;
+  --text:#eeeef5;--muted:rgba(238,238,245,0.44);--dim:rgba(238,238,245,0.22);
+  --ff-display:'Fraunces',serif;
+  --ff-body:'Outfit',sans-serif;
+  --ff-mono:'JetBrains Mono',monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--void);color:var(--text);font-family:var(--ff-body);overflow-x:hidden;cursor:none;}
+/* grain overlay */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity:.45;}
+
+/* ── CURSOR ───────────────────────────────────────────────────── */
+#_cur{position:fixed;width:10px;height:10px;border-radius:50%;background:var(--crimson);
+  pointer-events:none;z-index:10000;transform:translate(-50%,-50%);mix-blend-mode:screen;
+  transition:transform .08s,background .2s;}
+#_curo{position:fixed;width:32px;height:32px;border:1.5px solid rgba(232,25,60,.55);
+  border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);
+  transition:width .3s,height .3s,border-color .3s;}
+::-webkit-scrollbar{width:2px;}
+::-webkit-scrollbar-track{background:var(--void);}
+::-webkit-scrollbar-thumb{background:var(--crimson);border-radius:2px;}
+
+/* ── PROGRESS BAR ─────────────────────────────────────────────── */
+#_pbar{position:fixed;top:0;left:0;height:2px;
+  background:linear-gradient(90deg,var(--crimson),var(--gold));
+  z-index:10001;width:0;box-shadow:0 0 10px var(--crimson);}
+
+/* ── NAV ─────────────────────────────────────────────────────── */
+nav{position:fixed;top:0;left:0;right:0;z-index:900;padding:18px 48px;
+  display:flex;align-items:center;justify-content:space-between;
+  transition:background .5s,border-color .5s;border-bottom:1px solid transparent;}
+nav.stuck{background:rgba(4,4,10,.92);backdrop-filter:blur(24px);border-color:var(--border);}
+.logo-wrap{display:flex;align-items:center;gap:14px;text-decoration:none;}
+.logo-hex{width:44px;height:44px;flex-shrink:0;}
+.logo-hex svg{width:44px;height:44px;}
+.logo-name{font-family:var(--ff-display);font-size:18px;font-weight:700;color:var(--text);line-height:1;}
+.logo-name em{font-style:normal;color:var(--crimson);}
+.logo-tag{font-family:var(--ff-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-top:3px;}
+.nav-links{display:flex;gap:28px;align-items:center;}
+.nav-links a{font-size:13px;color:var(--muted);text-decoration:none;letter-spacing:.025em;
+  transition:color .2s;position:relative;}
+.nav-links a:hover{color:var(--text);}
+.nav-links a::after{content:'';position:absolute;bottom:-4px;left:0;width:0;height:1px;
+  background:var(--crimson);transition:width .3s;}
+.nav-links a:hover::after{width:100%;}
+.nav-cta{padding:9px 20px;background:var(--crimson);color:#fff;border-radius:5px;
+  font-size:13px;font-weight:500;transition:transform .2s,box-shadow .2s;}
+.nav-cta:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(232,25,60,.35);}
+.nav-cta::after{display:none!important;}
+
+/* ── HERO ─────────────────────────────────────────────────────── */
+#hero{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;padding:130px 48px 100px;}
+#_hcanvas{position:absolute;inset:0;pointer-events:none;}
+.hero-grid{position:absolute;inset:0;
+  background-image:linear-gradient(rgba(232,25,60,.033) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(232,25,60,.033) 1px,transparent 1px);
+  background-size:64px 64px;transform:perspective(700px) rotateX(14deg);
+  transform-origin:center 80%;}
+.hero-glow{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);
+  width:780px;height:780px;
+  background:radial-gradient(circle,rgba(232,25,60,.08) 0%,transparent 62%);
+  pointer-events:none;animation:hglow 5s ease-in-out infinite;}
+@keyframes hglow{0%,100%{transform:translate(-50%,-50%) scale(1);}
+  50%{transform:translate(-50%,-50%) scale(1.1);}}
+.hero-c{position:relative;z-index:10;max-width:920px;text-align:center;}
+.hero-pill{display:inline-flex;align-items:center;gap:9px;
+  background:rgba(232,25,60,.08);border:1px solid rgba(232,25,60,.22);
+  border-radius:100px;padding:7px 18px;font-family:var(--ff-mono);font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--crimson);
+  margin-bottom:36px;animation:fadeup .9s ease both;}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:var(--crimson);
+  animation:blink 1.6s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.15;}}
+h1.hero-h{font-family:var(--ff-display);font-size:clamp(50px,7.5vw,100px);
+  font-weight:700;line-height:.93;letter-spacing:-.03em;margin-bottom:28px;
+  animation:fadeup .9s .14s ease both;}
+.hero-h .l1{display:block;color:var(--text);}
+.hero-h .l2{display:block;
+  background:linear-gradient(120deg,var(--crimson) 0%,var(--gold) 55%,var(--crimson2) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  background-size:200%;animation:fadeup .9s .14s ease both,gshift 4s ease infinite alternate;}
+@keyframes gshift{0%{background-position:0%}100%{background-position:100%}}
+.hero-desc{font-size:17px;font-weight:300;color:var(--muted);line-height:1.7;
+  max-width:600px;margin:0 auto 48px;animation:fadeup .9s .28s ease both;}
+.hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;
+  animation:fadeup .9s .42s ease both;}
+.btn-primary{background:var(--crimson);color:#fff;padding:15px 36px;border-radius:6px;
+  font-size:14px;font-weight:500;letter-spacing:.04em;text-decoration:none;border:none;
+  cursor:pointer;transition:transform .2s,box-shadow .2s;}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(232,25,60,.38);}
+.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--muted);
+  padding:15px 36px;border-radius:6px;font-size:14px;text-decoration:none;cursor:pointer;
+  transition:border-color .2s,color .2s,transform .2s;}
+.btn-outline:hover{border-color:rgba(255,255,255,.28);color:var(--text);transform:translateY(-3px);}
+.hero-stats{display:flex;justify-content:center;margin-top:72px;padding-top:40px;
+  border-top:1px solid var(--border);animation:fadeup .9s .56s ease both;}
+.hstat{text-align:center;padding:0 48px;border-right:1px solid var(--border);}
+.hstat:last-child{border-right:none;}
+.hstat-val{font-family:var(--ff-display);font-size:38px;font-weight:700;
+  letter-spacing:-.03em;
+  background:linear-gradient(135deg,var(--text),var(--muted));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hstat-val.c{background:linear-gradient(135deg,var(--crimson),var(--gold));
+  -webkit-background-clip:text;background-clip:text;}
+.hstat-val.m{background:linear-gradient(135deg,var(--mint),var(--ice));
+  -webkit-background-clip:text;background-clip:text;}
+.hstat-lbl{font-family:var(--ff-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--dim);margin-top:5px;}
+@keyframes fadeup{from{opacity:0;transform:translateY(26px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── SECTION SHARED ───────────────────────────────────────────── */
+section{padding:110px 48px;position:relative;}
+.sec-label{font-family:var(--ff-mono);font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--crimson);margin-bottom:14px;
+  display:flex;align-items:center;gap:10px;}
+.sec-label::before{content:'';width:28px;height:1px;background:var(--crimson);}
+.sec-title{font-family:var(--ff-display);font-size:clamp(26px,4vw,48px);
+  font-weight:700;letter-spacing:-.03em;line-height:1.08;margin-bottom:16px;}
+.sec-desc{font-size:15px;font-weight:300;color:var(--muted);line-height:1.78;max-width:540px;}
+.rv {opacity:0;transform:translateY(36px);transition:opacity .85s ease,transform .85s ease;}
+.rvl{opacity:0;transform:translateX(-36px);transition:opacity .85s ease,transform .85s ease;}
+.rvr{opacity:0;transform:translateX(36px);transition:opacity .85s ease,transform .85s ease;}
+.rv.on,.rvl.on,.rvr.on{opacity:1;transform:none;}
+
+/* ── MODEL STATUS BADGE ───────────────────────────────────────── */
+.model-badge{display:inline-flex;align-items:center;gap:7px;padding:5px 16px;
+  border-radius:100px;font-family:var(--ff-mono);font-size:10px;letter-spacing:.08em;
+  margin-top:14px;}
+.model-badge.live{background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);
+  color:var(--mint);}
+.model-badge.demo{background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.25);
+  color:var(--gold2);}
+.mbdot{width:5px;height:5px;border-radius:50%;animation:blink 1.6s infinite;}
+.live .mbdot{background:var(--mint);}
+.demo .mbdot{background:var(--gold);}
+
+/* ── PREDICT SECTION ──────────────────────────────────────────── */
+#predict{background:var(--deep);}
+.predict-wrap{max-width:1160px;margin:0 auto;}
+.predict-hdr{text-align:center;margin-bottom:56px;}
+.predict-layout{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;}
+
+/* input panel */
+.inp-panel{background:var(--glass);border:1px solid var(--border);border-radius:18px;
+  padding:36px 32px;position:relative;overflow:hidden;}
+.inp-panel::before{content:'';position:absolute;top:-80px;right:-80px;width:260px;
+  height:260px;background:radial-gradient(circle,rgba(232,25,60,.07),transparent 65%);
+  pointer-events:none;}
+.panel-hd{font-family:var(--ff-mono);font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:28px;
+  display:flex;align-items:center;gap:10px;}
+.panel-hd::before{content:'//';color:var(--crimson);font-weight:700;}
+.fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px;}
+.fgroup{display:flex;flex-direction:column;gap:6px;}
+.flabel{font-family:var(--ff-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
+.flabel-range{font-size:9px;color:var(--dim);background:rgba(255,255,255,.05);
+  padding:2px 7px;border-radius:3px;}
+.finput{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;
+  padding:13px 15px;color:var(--text);font-family:var(--ff-mono);font-size:15px;
+  font-weight:500;outline:none;width:100%;
+  transition:border-color .2s,box-shadow .2s,background .2s;-moz-appearance:textfield;}
+.finput::-webkit-inner-spin-button,.finput::-webkit-outer-spin-button{-webkit-appearance:none;}
+.finput::placeholder{color:var(--dim);font-weight:400;}
+.finput:focus{border-color:rgba(232,25,60,.5);box-shadow:0 0 0 3px rgba(232,25,60,.07);
+  background:rgba(255,255,255,.07);}
+.finput.valid{border-color:rgba(0,200,150,.45);}
+.finput.warn {border-color:rgba(240,165,0,.55);}
+.fhint{font-size:11px;color:var(--dim);font-family:var(--ff-mono);}
+.fhint.abnormal{color:var(--gold);}
+.fhint.ok     {color:var(--mint);}
+
+/* ── PREDICT BUTTON  (with requested states) ──────────────────── */
+.predict-btn{
+  width:100%;
+  background:linear-gradient(135deg,var(--crimson),#c41633);
+  border:none;border-radius:10px;padding:17px;
+  color:#fff;font-family:var(--ff-mono);font-size:13px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;
+  cursor:pointer;
+  transition:transform .2s,box-shadow .2s,opacity .2s;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+}
+.predict-btn:not(:disabled):hover{
+  transform:translateY(-2px);
+  box-shadow:0 14px 40px rgba(232,25,60,.42);
+}
+.predict-btn:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
+}
+.predict-btn .spin{
+  width:14px;height:14px;
+  border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  display:none;
+  flex-shrink:0;
+}
+.predict-btn.loading .spin{display:block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* features preview panel */
+.feat-panel{background:var(--glass);border:1px solid var(--border);border-radius:18px;
+  padding:32px 28px;position:sticky;top:96px;}
+.feat-row{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--border);position:relative;}
+.feat-row:last-child{border-bottom:none;}
+.feat-nm{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px;flex:1;}
+.feat-nm .fi{font-family:var(--ff-mono);font-size:10px;color:var(--dim);min-width:24px;}
+.feat-v{font-family:var(--ff-mono);font-size:12px;font-weight:500;color:var(--text);
+  transition:color .4s;min-width:70px;text-align:right;}
+.feat-v.stale{color:var(--dim);}
+.feat-v.hot{color:var(--gold);}
+.fbar-bg{position:absolute;bottom:0;left:0;height:1px;width:100%;background:var(--border);}
+.fbar-fill{position:absolute;bottom:0;left:0;height:1px;
+  background:linear-gradient(90deg,var(--crimson),var(--gold));
+  transition:width .6s var(--ease);width:0;}
+.badge-base{font-family:var(--ff-mono);font-size:8px;background:rgba(232,25,60,.08);
+  border:1px solid rgba(232,25,60,.15);color:var(--crimson);
+  padding:1px 6px;border-radius:3px;margin-left:4px;flex-shrink:0;}
+.badge-der{font-family:var(--ff-mono);font-size:8px;background:rgba(0,200,150,.1);
+  border:1px solid rgba(0,200,150,.2);color:var(--mint);
+  padding:1px 6px;border-radius:3px;margin-left:4px;flex-shrink:0;}
+.badge-bin{font-family:var(--ff-mono);font-size:8px;background:rgba(77,166,255,.1);
+  border:1px solid rgba(77,166,255,.2);color:var(--ice);
+  padding:1px 6px;border-radius:3px;margin-left:4px;flex-shrink:0;}
+
+/* ── RESULT SECTION ───────────────────────────────────────────── */
+#result-section{display:none;background:var(--void);border-top:1px solid var(--border);
+  padding:76px 48px;}
+#result-section.show{display:block;}
+.result-wrap{max-width:1160px;margin:0 auto;}
+
+.result-banner{border-radius:20px;padding:46px;margin-bottom:32px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:36px;flex-wrap:wrap;position:relative;overflow:hidden;
+  animation:banneranim .6s var(--ease) both;}
+@keyframes banneranim{from{opacity:0;transform:translateY(22px) scale(.98);}to{opacity:1;transform:none;}}
+.result-banner.detected{
+  background:linear-gradient(135deg,rgba(232,25,60,.1) 0%,rgba(232,25,60,.04) 100%);
+  border:1px solid rgba(232,25,60,.26);}
+.result-banner.safe{
+  background:linear-gradient(135deg,rgba(0,200,150,.1) 0%,rgba(0,200,150,.03) 100%);
+  border:1px solid rgba(0,200,150,.22);}
+.result-banner::before{content:'';position:absolute;top:-40px;right:-40px;
+  width:200px;height:200px;border-radius:50%;filter:blur(50px);opacity:.3;}
+.detected::before{background:var(--crimson);}
+.safe::before{background:var(--mint);}
+.res-main{flex:1;}
+.res-verdict{font-family:var(--ff-display);font-size:clamp(24px,4vw,44px);
+  font-weight:700;letter-spacing:-.02em;margin-bottom:10px;line-height:1.05;}
+.detected .res-verdict{color:var(--crimson2);}
+.safe .res-verdict{color:var(--mint2);}
+.res-sub{font-size:15px;color:var(--muted);line-height:1.65;max-width:520px;}
+.res-right{text-align:center;flex-shrink:0;}
+.ring-wrap{position:relative;width:140px;height:140px;margin:0 auto 10px;}
+.ring-wrap canvas{position:absolute;inset:0;}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;}
+.ring-pct{font-family:var(--ff-display);font-size:30px;font-weight:700;
+  line-height:1;letter-spacing:-.03em;}
+.detected .ring-pct{color:var(--crimson2);}
+.safe .ring-pct{color:var(--mint2);}
+.ring-lbl{font-family:var(--ff-mono);font-size:9px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim);margin-top:3px;}
+
+/* risk meter */
+.risk-meter{background:var(--glass);border:1px solid var(--border);border-radius:14px;
+  padding:24px;margin-bottom:22px;}
+.risk-meter-lbl{font-family:var(--ff-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:16px;}
+.risk-track{height:10px;border-radius:5px;
+  background:linear-gradient(90deg,#00c896 0%,#00c896 25%,#4da6ff 25%,
+    #4da6ff 55%,#f0a500 55%,#f0a500 80%,#e8193c 80%,#e8193c 100%);
+  position:relative;margin-bottom:18px;}
+.risk-needle{position:absolute;top:50%;transform:translateX(-50%) translateY(-50%);
+  width:16px;height:16px;background:#fff;border-radius:50%;
+  box-shadow:0 0 10px rgba(0,0,0,.5);transition:left 1.2s var(--ease);left:50%;}
+.risk-ticks{display:flex;justify-content:space-between;font-family:var(--ff-mono);
+  font-size:9px;color:var(--dim);}
+
+/* result cards grid */
+.res-cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:22px;}
+.rcard{background:var(--glass);border:1px solid var(--border);border-radius:14px;
+  padding:26px 22px;animation:fadeup .7s ease both;}
+.rcard-ttl{font-family:var(--ff-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;}
+.rdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--crimson);}
+
+/* consult card */
+.consult-card{background:linear-gradient(135deg,rgba(232,25,60,.06),rgba(232,25,60,.02));
+  border:1px solid rgba(232,25,60,.2);border-radius:14px;padding:28px 24px;
+  grid-column:1/-1;animation:fadeup .7s .1s ease both;}
+.consult-card.safe-c{
+  background:linear-gradient(135deg,rgba(0,200,150,.06),rgba(0,200,150,.02));
+  border-color:rgba(0,200,150,.18);}
+.consult-ttl{font-family:var(--ff-display);font-size:18px;font-weight:600;
+  margin-bottom:12px;color:var(--crimson2);}
+.consult-card.safe-c .consult-ttl{color:var(--mint2);}
+.consult-body{font-size:14px;color:var(--muted);line-height:1.72;}
+
+/* diet panel */
+.diet-panel{background:var(--glass);border:1px solid var(--border);border-radius:14px;
+  padding:28px 24px;grid-column:1/-1;animation:fadeup .7s .2s ease both;}
+.diet-ttl{font-family:var(--ff-display);font-size:18px;font-weight:600;
+  margin-bottom:18px;color:var(--gold2);display:flex;align-items:center;gap:10px;}
+.diet-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.diet-card{background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:10px;padding:16px 14px;transition:border-color .2s,transform .2s;}
+.diet-card:hover{border-color:var(--border2);transform:translateY(-3px);}
+.diet-card-hd{font-size:13px;font-weight:600;display:flex;align-items:center;
+  justify-content:space-between;margin-bottom:10px;}
+.diet-tag{font-family:var(--ff-mono);font-size:8px;letter-spacing:.08em;
+  padding:2px 7px;border-radius:3px;text-transform:uppercase;}
+.eat .diet-tag{background:rgba(0,200,150,.12);color:var(--mint);border:1px solid rgba(0,200,150,.2);}
+.avoid .diet-tag{background:rgba(232,25,60,.1);color:var(--crimson2);border:1px solid rgba(232,25,60,.2);}
+.diet-items{display:flex;flex-wrap:wrap;gap:6px;list-style:none;}
+.diet-items li{font-size:12px;color:var(--muted);background:rgba(255,255,255,.04);
+  border:1px solid var(--border);border-radius:5px;padding:4px 9px;}
+.eat  .diet-items li{border-color:rgba(0,200,150,.12);}
+.avoid .diet-items li{border-color:rgba(232,25,60,.12);}
+
+/* ── HOW IT WORKS ─────────────────────────────────────────────── */
+#how{background:var(--surface);}
+.how-layout{max-width:1160px;margin:0 auto;display:grid;
+  grid-template-columns:1fr 1.1fr;gap:80px;align-items:center;}
+.pipeline{display:flex;flex-direction:column;}
+.pipe-step{display:flex;gap:20px;padding:22px 0;border-bottom:1px solid var(--border);
+  transition:padding-left .3s;}
+.pipe-step:first-child{padding-top:0;}
+.pipe-step:last-child{border-bottom:none;}
+.pipe-step:hover{padding-left:8px;}
+.pipe-num{font-family:var(--ff-mono);font-size:11px;color:var(--crimson);
+  min-width:28px;padding-top:3px;}
+.pipe-body h4{font-family:var(--ff-display);font-size:16px;font-weight:600;margin-bottom:5px;}
+.pipe-body p{font-size:13px;color:var(--muted);line-height:1.62;}
+.retina-wrap{display:flex;align-items:center;justify-content:center;position:relative;}
+.retina-wrap::before{content:'';position:absolute;width:340px;height:340px;
+  background:radial-gradient(circle,rgba(232,25,60,.07),transparent 65%);border-radius:50%;}
+
+/* ── FEATURE CARDS ────────────────────────────────────────────── */
+#features{background:var(--deep);}
+.feat-hdr{max-width:1160px;margin:0 auto 50px;text-align:center;}
+.feat-grid{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);
+  gap:2px;background:var(--border);border-radius:16px;overflow:hidden;}
+.fcard{background:var(--deep);padding:32px 26px;position:relative;overflow:hidden;
+  transition:background .3s;}
+.fcard:hover{background:#0b0b16;}
+.fcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:0;
+  background:linear-gradient(90deg,transparent,var(--crimson),transparent);
+  transition:opacity .3s;}
+.fcard:hover::before{opacity:1;}
+.fcard-icon{width:42px;height:42px;background:rgba(232,25,60,.08);
+  border:1px solid rgba(232,25,60,.15);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px;}
+.fcard-ttl{font-family:var(--ff-display);font-size:16px;font-weight:600;margin-bottom:8px;}
+.fcard-desc{font-size:13px;color:var(--muted);line-height:1.68;}
+
+/* ── RISK TIERS ───────────────────────────────────────────────── */
+#risk{background:var(--void);}
+.risk-hdr{max-width:1160px;margin:0 auto 50px;}
+.risk-grid{max-width:1160px;margin:0 auto;display:grid;
+  grid-template-columns:repeat(4,1fr);gap:16px;}
+.tcard{border-radius:14px;padding:26px 20px;border:1px solid var(--border);
+  transition:transform .3s,box-shadow .3s;}
+.tcard:hover{transform:translateY(-6px) perspective(500px) rotateX(3deg);}
+.tcard.t0{background:rgba(0,200,150,.05);border-color:rgba(0,200,150,.13);}
+.tcard.t0:hover{box-shadow:0 20px 50px rgba(0,200,150,.1);}
+.tcard.t1{background:rgba(77,166,255,.05);border-color:rgba(77,166,255,.13);}
+.tcard.t1:hover{box-shadow:0 20px 50px rgba(77,166,255,.1);}
+.tcard.t2{background:rgba(240,165,0,.05);border-color:rgba(240,165,0,.13);}
+.tcard.t2:hover{box-shadow:0 20px 50px rgba(240,165,0,.12);}
+.tcard.t3{background:rgba(232,25,60,.06);border-color:rgba(232,25,60,.18);}
+.tcard.t3:hover{box-shadow:0 20px 50px rgba(232,25,60,.15);}
+.tbadge{display:inline-block;padding:3px 10px;border-radius:100px;
+  font-family:var(--ff-mono);font-size:9px;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:700;margin-bottom:12px;}
+.t0 .tbadge{background:rgba(0,200,150,.12);color:var(--mint);}
+.t1 .tbadge{background:rgba(77,166,255,.12);color:var(--ice);}
+.t2 .tbadge{background:rgba(240,165,0,.12);color:var(--gold2);}
+.t3 .tbadge{background:rgba(232,25,60,.12);color:var(--crimson2);}
+.tname{font-family:var(--ff-display);font-size:17px;font-weight:700;margin-bottom:6px;}
+.trange{font-family:var(--ff-mono);font-size:17px;font-weight:600;margin-bottom:10px;}
+.t0 .trange{color:var(--mint);}
+.t1 .trange{color:var(--ice);}
+.t2 .trange{color:var(--gold2);}
+.t3 .trange{color:var(--crimson2);}
+.tdesc{font-size:12px;color:var(--muted);line-height:1.65;}
+
+/* ── API REFERENCE ────────────────────────────────────────────── */
+#api{background:var(--surface);}
+.api-layout{max-width:1160px;margin:0 auto;display:grid;
+  grid-template-columns:1fr 1.4fr;gap:72px;align-items:start;}
+.ep-list{display:flex;flex-direction:column;gap:10px;margin-top:26px;}
+.ep{display:flex;align-items:center;gap:12px;padding:11px 14px;
+  background:var(--glass);border:1px solid var(--border);border-radius:8px;
+  transition:background .2s,border-color .2s;}
+.ep:hover{background:rgba(255,255,255,.06);border-color:var(--border2);}
+.method{font-family:var(--ff-mono);font-size:10px;font-weight:700;
+  padding:3px 8px;border-radius:3px;min-width:42px;text-align:center;}
+.mpost{background:rgba(0,200,150,.13);color:var(--mint);}
+.mget {background:rgba(77,166,255,.13);color:var(--ice);}
+.ep-path{font-family:var(--ff-mono);font-size:13px;}
+.ep-note{font-size:11px;color:var(--dim);margin-left:auto;}
+.code-block{background:#060610;border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.code-hd{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;background:rgba(255,255,255,.025);border-bottom:1px solid var(--border);}
+.cdots{display:flex;gap:6px;}
+.cd{width:10px;height:10px;border-radius:50%;}
+.cd1{background:#ff5f57;}.cd2{background:#febc2e;}.cd3{background:#28c840;}
+.clang{font-family:var(--ff-mono);font-size:10px;color:var(--dim);}
+.code-body{padding:20px;font-family:var(--ff-mono);font-size:12px;line-height:1.8;
+  overflow-x:auto;white-space:pre;color:#c0c0d0;}
+.ck{color:#ff79c6;}.cs{color:#f1fa8c;}.cn{color:var(--gold2);}
+.cc{color:rgba(255,255,255,.28);}.cf{color:var(--ice);}.cv{color:var(--mint);}
+
+/* ── TECH STACK ───────────────────────────────────────────────── */
+#tech{background:var(--void);}
+.tech-inner{max-width:1160px;margin:0 auto;}
+.tech-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:48px;}
+.ts{background:var(--glass);border:1px solid var(--border);border-radius:12px;
+  padding:22px 16px;text-align:center;
+  transition:transform .3s,border-color .3s,box-shadow .3s;
+  position:relative;overflow:hidden;}
+.ts:hover{transform:translateY(-7px);border-color:var(--border2);
+  box-shadow:0 18px 44px rgba(0,0,0,.35);}
+.ts::after{content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 0%,rgba(232,25,60,.05),transparent 60%);
+  opacity:0;transition:opacity .3s;}
+.ts:hover::after{opacity:1;}
+.ts-icon{font-size:28px;margin-bottom:10px;display:block;}
+.ts-name{font-family:var(--ff-display);font-size:14px;font-weight:600;margin-bottom:5px;}
+.ts-role{font-size:11px;color:var(--muted);}
+.ts-ver{font-family:var(--ff-mono);font-size:9px;color:var(--crimson);margin-top:5px;display:block;}
+
+/* ── FOOTER ───────────────────────────────────────────────────── */
+footer{background:var(--void);border-top:1px solid var(--border);padding:48px;}
+.foot-inner{max-width:1160px;margin:0 auto;display:flex;justify-content:space-between;
+  align-items:center;flex-wrap:wrap;gap:22px;}
+footer p{font-size:12px;color:var(--dim);margin-top:5px;}
+.flinks{display:flex;gap:22px;}
+.flinks a{font-size:13px;color:var(--muted);text-decoration:none;transition:color .2s;}
+.flinks a:hover{color:var(--text);}
+
+/* ── RESPONSIVE ───────────────────────────────────────────────── */
+@media(max-width:1080px){
+  .predict-layout,.how-layout,.api-layout{grid-template-columns:1fr;gap:32px;}
+  .risk-grid{grid-template-columns:1fr 1fr;}
+  .feat-panel{position:static;}
+}
+@media(max-width:768px){
+  section{padding:70px 22px;}
+  nav{padding:14px 22px;}
+  .nav-links{display:none;}
+  .hstat{padding:0 20px;}
+  .risk-grid,.tech-grid,.feat-grid{grid-template-columns:1fr 1fr;}
+  .res-cards,.diet-grid{grid-template-columns:1fr;}
+  .fields-grid{grid-template-columns:1fr;}
+  footer{padding:34px 22px;}
+}
+@media(max-width:480px){
+  .hero-stats{flex-wrap:wrap;}
+  .hstat{width:50%;border-right:none;border-bottom:1px solid var(--border);padding:12px;}
+  .risk-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div id="_pbar"></div>
+<div id="_cur"></div>
+<div id="_curo"></div>
+
+<!-- NAV -->
+<nav id="_nav">
+  <a href="#" class="logo-wrap">
+    <div class="logo-hex">
+      <svg viewBox="0 0 46 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="lg1" x1="0" y1="0" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#e8193c"/><stop offset="1" stop-color="#f0a500"/>
+          </linearGradient>
+        </defs>
+        <path d="M23 2L40 11.5L40 34.5L23 44L6 34.5L6 11.5Z" stroke="url(#lg1)" stroke-width="1.2" fill="rgba(232,25,60,0.06)"/>
+        <path d="M10 23Q17 14 23 14Q29 14 36 23Q29 32 23 32Q17 32 10 23Z" stroke="url(#lg1)" stroke-width="1.2" fill="none"/>
+        <circle cx="23" cy="23" r="6.5" stroke="url(#lg1)" stroke-width="1" fill="rgba(232,25,60,0.05)"/>
+        <circle cx="23" cy="23" r="3" fill="url(#lg1)"/>
+        <line x1="23" y1="14" x2="23" y2="17" stroke="rgba(232,25,60,0.4)" stroke-width="0.8"/>
+        <line x1="23" y1="29" x2="23" y2="32" stroke="rgba(232,25,60,0.4)" stroke-width="0.8"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-name"><em>P653</em> · RetinaSight</div>
+      <span class="logo-tag">Clinical Research Platform</span>
+    </div>
+  </a>
+  <div class="nav-links">
+    <a href="#predict">Prediction</a>
+    <a href="#how">How It Works</a>
+    <a href="#risk">Risk Tiers</a>
+    <a href="#features">Features</a>
+    <a href="#api">API</a>
+    <a href="#tech">Tech Stack</a>
+    <a href="#predict" class="nav-cta">Run Assessment</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="_hcanvas"></canvas>
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-c">
+    <div class="hero-pill"><span class="pill-dot"></span>Project P653 — Clinical Research</div>
+    <h1 class="hero-h">
+      <span class="l1">Diabetic Retinopathy</span>
+      <span class="l2">Prediction Platform</span>
+    </h1>
+    <p class="hero-desc">Clinical-grade retinopathy risk assessment powered by a GridSearchCV-tuned Logistic Regression. Four inputs. Eleven engineered features. Instant Flask inference.</p>
+    <div class="hero-btns">
+      <a href="#predict" class="btn-primary">Run Assessment</a>
+      <a href="#how" class="btn-outline">See How It Works</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hstat-val c">11</div><div class="hstat-lbl">Health Indicators</div></div>
+      <div class="hstat"><div class="hstat-val">4</div><div class="hstat-lbl">Clinical Inputs</div></div>
+      <div class="hstat"><div class="hstat-val m">4</div><div class="hstat-lbl">Risk Tiers</div></div>
+      <div class="hstat"><div class="hstat-val">REST</div><div class="hstat-lbl">API Ready</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PREDICT -->
+<section id="predict">
+  <div class="predict-wrap">
+    <div class="predict-hdr rv">
+      <div class="sec-label" style="justify-content:center;">Prediction Engine</div>
+      <h2 class="sec-title" style="text-align:center;">Enter Patient Data</h2>
+      <p class="sec-desc" style="margin:0 auto;text-align:center;">Input four base clinical measurements. All 11 notebook features are derived and sent to Flask in real time.</p>
+      <div id="model-badge-wrap" style="display:flex;justify-content:center;"></div>
+    </div>
+
+    <div class="predict-layout">
+      <!-- INPUT PANEL -->
+      <div class="inp-panel rvl">
+        <div class="panel-hd">Patient Input — 4 Base Features</div>
+        <div class="fields-grid">
+          <div class="fgroup">
+            <label class="flabel" for="f-age">Age <span class="flabel-range">18–100 yrs</span></label>
+            <input type="number" id="f-age" class="finput" placeholder="e.g. 68.5"
+              step="0.1" min="18" max="100" oninput="onInput()"/>
+            <span class="fhint" id="h-age">Enter age in years</span>
+          </div>
+          <div class="fgroup">
+            <label class="flabel" for="f-sbp">Systolic BP <span class="flabel-range">Normal &lt;120</span></label>
+            <input type="number" id="f-sbp" class="finput" placeholder="e.g. 142.0"
+              step="0.1" min="60" max="250" oninput="onInput()"/>
+            <span class="fhint" id="h-sbp">Systolic BP (mmHg)</span>
+          </div>
+          <div class="fgroup">
+            <label class="flabel" for="f-dbp">Diastolic BP <span class="flabel-range">Normal &lt;80</span></label>
+            <input type="number" id="f-dbp" class="finput" placeholder="e.g. 91.5"
+              step="0.1" min="40" max="160" oninput="onInput()"/>
+            <span class="fhint" id="h-dbp">Diastolic BP (mmHg)</span>
+          </div>
+          <div class="fgroup">
+            <label class="flabel" for="f-chol">Cholesterol <span class="flabel-range">Normal 125–200</span></label>
+            <input type="number" id="f-chol" class="finput" placeholder="e.g. 228.4"
+              step="0.1" min="50" max="400" oninput="onInput()"/>
+            <span class="fhint" id="h-chol">Total cholesterol (mg/dL)</span>
+          </div>
+        </div>
+
+        <!-- BUTTON — with Processing / disabled states as requested -->
+        <button class="predict-btn" id="predict-btn" onclick="runPrediction()">
+          <span class="spin" id="btn-spin"></span>
+          <span id="btn-text">Analyse Risk Profile</span>
+        </button>
+      </div>
+
+      <!-- FEATURES PREVIEW PANEL -->
+      <div class="feat-panel rvr">
+        <div class="panel-hd">Auto-Computed Features (Notebook Cell 25)</div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F1</span>Age<span class="badge-base">base</span></span><span class="feat-v stale" id="fv-age">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-age"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F2</span>Systolic BP<span class="badge-base">base</span></span><span class="feat-v stale" id="fv-sbp">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-sbp"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F3</span>Diastolic BP<span class="badge-base">base</span></span><span class="feat-v stale" id="fv-dbp">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-dbp"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F4</span>Cholesterol<span class="badge-base">base</span></span><span class="feat-v stale" id="fv-chol">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-chol"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F5</span>Pulse Pressure<span class="badge-der">derived</span></span><span class="feat-v stale" id="fv-pp">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-pp" style="background:linear-gradient(90deg,var(--mint),var(--ice))"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F6</span>BP Ratio<span class="badge-der">derived</span></span><span class="feat-v stale" id="fv-bpr">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-bpr" style="background:linear-gradient(90deg,var(--mint),var(--ice))"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F7</span>Age × Systolic<span class="badge-der">derived</span></span><span class="feat-v stale" id="fv-as">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-as" style="background:linear-gradient(90deg,var(--mint),var(--ice))"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F8</span>Chol / Age<span class="badge-der">derived</span></span><span class="feat-v stale" id="fv-ca">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-ca" style="background:linear-gradient(90deg,var(--mint),var(--ice))"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F9</span>Hypertension Score<span class="badge-bin">0–2</span></span><span class="feat-v stale" id="fv-hs">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-hs" style="background:linear-gradient(90deg,var(--gold),var(--crimson))"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F10</span>High Cholesterol<span class="badge-bin">0/1</span></span><span class="feat-v stale" id="fv-hc">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-hc" style="background:linear-gradient(90deg,var(--gold),var(--crimson))"></div></div></div>
+        <div class="feat-row"><span class="feat-nm"><span class="fi">F11</span>Age Group Enc<span class="badge-bin">0–3</span></span><span class="feat-v stale" id="fv-ag">—</span><div class="fbar-bg"><div class="fbar-fill" id="fb-ag" style="background:linear-gradient(90deg,var(--gold),var(--crimson))"></div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULT -->
+<div id="result-section">
+  <div class="result-wrap">
+    <div class="result-banner" id="res-banner">
+      <div class="res-main">
+        <div class="res-verdict" id="res-verdict">—</div>
+        <p class="res-sub" id="res-sub">—</p>
+      </div>
+      <div class="res-right">
+        <div class="ring-wrap">
+          <canvas id="ring-canvas" width="140" height="140"></canvas>
+          <div class="ring-center">
+            <div class="ring-pct" id="res-pct">—</div>
+            <div class="ring-lbl">Probability</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="risk-meter">
+      <div class="risk-meter-lbl">Risk Probability Meter — Four-Tier Classification</div>
+      <div class="risk-track"><div class="risk-needle" id="risk-needle"></div></div>
+      <div class="risk-ticks">
+        <span>0%</span>
+        <span style="color:var(--mint)">Minimal</span>
+        <span style="color:var(--ice)">Low</span>
+        <span style="color:var(--gold)">Moderate</span>
+        <span style="color:var(--crimson)">High</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <div class="res-cards">
+      <div class="consult-card" id="consult-card">
+        <div class="consult-ttl" id="consult-ttl">—</div>
+        <div class="consult-body" id="consult-body">—</div>
+      </div>
+      <div class="rcard">
+        <div class="rcard-ttl"><div class="rdot"></div>Input &amp; Derived Summary</div>
+        <div id="inp-summary" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+      </div>
+      <div class="rcard">
+        <div class="rcard-ttl"><div class="rdot"></div>Elevated Markers</div>
+        <div id="elev-markers" style="font-size:13px;color:var(--muted);line-height:1.8;"></div>
+      </div>
+      <div class="diet-panel" id="diet-panel" style="display:none;">
+        <div class="diet-ttl">🥗 Recommended Diet Plan — Diabetic Retinopathy</div>
+        <div class="diet-grid">
+          <div class="diet-card eat">
+            <div class="diet-card-hd"><span>Foods to Include</span><span class="diet-tag">Eat</span></div>
+            <ul class="diet-items">
+              <li>Leafy greens (spinach, kale)</li><li>Oily fish (salmon, mackerel)</li>
+              <li>Blueberries &amp; berries</li><li>Whole grains (quinoa, oats)</li>
+              <li>Legumes (lentils, beans)</li><li>Walnuts &amp; almonds</li>
+              <li>Citrus fruits</li><li>Low-fat dairy</li>
+              <li>Avocado</li><li>Sweet potato</li>
+              <li>Eggs (in moderation)</li><li>Olive oil</li>
+            </ul>
+          </div>
+          <div class="diet-card avoid">
+            <div class="diet-card-hd"><span>Foods to Avoid</span><span class="diet-tag">Avoid</span></div>
+            <ul class="diet-items">
+              <li>Refined sugar</li><li>White bread &amp; pasta</li>
+              <li>Fried foods</li><li>Processed meats</li>
+              <li>Full-fat dairy</li><li>Sugary drinks &amp; sodas</li>
+              <li>Alcohol</li><li>High-sodium foods</li>
+              <li>Pastries &amp; cakes</li><li>Fast food</li>
+              <li>Trans fats (margarine)</li><li>Excess red meat</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="how-layout">
+    <div class="rvl">
+      <div class="sec-label">Pipeline</div>
+      <h2 class="sec-title">How It Works</h2>
+      <p class="sec-desc" style="margin-bottom:38px;">Five-stage notebook pipeline — raw floats to interpretable probability via Flask + scikit-learn.</p>
+      <div class="pipeline">
+        <div class="pipe-step"><div class="pipe-num">01</div><div class="pipe-body"><h4>Enter 4 Float Values</h4><p>Age, systolic BP, diastolic BP, cholesterol — decimal precision accepted.</p></div></div>
+        <div class="pipe-step"><div class="pipe-num">02</div><div class="pipe-body"><h4>Feature Engineering (Cell 25)</h4><p>7 derived features auto-computed: pulse_pressure, bp_ratio, age_systolic, chol_age_ratio, hypertension_score, high_cholesterol, age_group_enc.</p></div></div>
+        <div class="pipe-step"><div class="pipe-num">03</div><div class="pipe-body"><h4>POST /predict → Flask</h4><p>Browser sends 4 base values as JSON. Flask re-engineers all 11 features server-side with <code style="color:var(--crimson);font-family:var(--ff-mono);font-size:11px">run_inference()</code>.</p></div></div>
+        <div class="pipe-step"><div class="pipe-num">04</div><div class="pipe-body"><h4>StandardScaler + LogisticRegression</h4><p>11 features scaled by training-fitted scaler, passed to GridSearchCV-tuned LR from <code style="color:var(--crimson);font-family:var(--ff-mono);font-size:11px">models/dp1_model.pkl</code>.</p></div></div>
+        <div class="pipe-step"><div class="pipe-num">05</div><div class="pipe-body"><h4>Result + Clinical Guidance</h4><p>Probability [0–1] mapped to 4-tier classification with consult alert and diet plan.</p></div></div>
+      </div>
+    </div>
+    <div class="retina-wrap rvr">
+      <svg viewBox="0 0 340 340" width="310" height="310" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="rg" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#0e0e1a"/>
+            <stop offset="100%" stop-color="#04040a"/>
+          </radialGradient>
+          <filter id="gf">
+            <feGaussianBlur stdDeviation="2" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <circle cx="170" cy="170" r="155" fill="url(#rg)" stroke="rgba(232,25,60,0.18)" stroke-width="1.2"/>
+        <circle cx="170" cy="170" r="118" fill="none" stroke="rgba(232,25,60,0.07)" stroke-width="1" stroke-dasharray="4 7"/>
+        <circle cx="170" cy="170" r="80"  fill="none" stroke="rgba(232,25,60,0.1)"  stroke-width="1" stroke-dasharray="3 5"/>
+        <circle cx="170" cy="170" r="42"  fill="none" stroke="rgba(232,25,60,0.15)" stroke-width="1.2"/>
+        <g opacity="0.75" filter="url(#gf)">
+          <path d="M170 170 Q200 140 235 128" stroke="#e8193c" stroke-width="1.8" fill="none"/>
+          <path d="M235 128 Q255 118 265 106" stroke="#e8193c" stroke-width="1.1" fill="none"/>
+          <path d="M170 170 Q136 142 102 130" stroke="#e8193c" stroke-width="1.8" fill="none"/>
+          <path d="M102 130 Q76 118 62 106" stroke="#e8193c" stroke-width="1.1" fill="none"/>
+          <path d="M170 170 Q185 206 198 238" stroke="#e8193c" stroke-width="1.8" fill="none"/>
+          <path d="M170 170 Q148 202 132 228" stroke="#e8193c" stroke-width="1.8" fill="none"/>
+        </g>
+        <circle cx="212" cy="154" r="24" fill="rgba(240,165,0,0.1)" stroke="rgba(240,165,0,0.4)" stroke-width="1.5"/>
+        <text x="212" y="158" text-anchor="middle" fill="rgba(240,165,0,0.75)" font-size="8" font-family="monospace">OD</text>
+        <circle cx="142" cy="178" r="18" fill="none" stroke="rgba(77,166,255,0.4)" stroke-width="1.5"/>
+        <circle cx="142" cy="178" r="7" fill="rgba(77,166,255,0.1)" stroke="rgba(77,166,255,0.5)" stroke-width="1"/>
+        <text x="142" y="204" text-anchor="middle" fill="rgba(77,166,255,0.65)" font-size="7.5" font-family="monospace">FOVEA</text>
+        <circle cx="170" cy="170" r="5.5" fill="#e8193c" filter="url(#gf)"/>
+        <line id="scanl" x1="15" y1="100" x2="325" y2="100" stroke="rgba(0,200,150,0.35)" stroke-width="1"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="feat-hdr rv">
+    <div class="sec-label" style="justify-content:center;">Capabilities</div>
+    <h2 class="sec-title">Everything In One Platform</h2>
+    <p class="sec-desc" style="margin:0 auto;">From float input validation to diet prescription — P653 covers the complete clinical workflow.</p>
+  </div>
+  <div class="feat-grid">
+    <div class="fcard rv" style="transition-delay:.04s"><div class="fcard-icon">🔢</div><div class="fcard-ttl">Float Precision Inputs</div><p class="fcard-desc">All 4 clinical inputs accept decimal precision — matching real lab measurement accuracy.</p></div>
+    <div class="fcard rv" style="transition-delay:.08s"><div class="fcard-icon">⚙️</div><div class="fcard-ttl">11 Notebook Features</div><p class="fcard-desc">Exact cell-25 engineering: pulse_pressure, bp_ratio, age_systolic, chol_age_ratio, hypertension_score, high_cholesterol, age_group_enc.</p></div>
+    <div class="fcard rv" style="transition-delay:.12s"><div class="fcard-icon">📊</div><div class="fcard-ttl">Probability Score</div><p class="fcard-desc">Continuous [0–1] retinopathy probability with animated ring, risk meter, and 4-tier classification.</p></div>
+    <div class="fcard rv" style="transition-delay:.16s"><div class="fcard-icon">🩺</div><div class="fcard-ttl">Doctor Consultation Alert</div><p class="fcard-desc">Positive detections surface an ophthalmologist referral with urgency context and follow-up steps.</p></div>
+    <div class="fcard rv" style="transition-delay:.20s"><div class="fcard-icon">🥗</div><div class="fcard-ttl">Diet Plan Guidance</div><p class="fcard-desc">Detected cases receive a structured dietary guide — foods to include and avoid.</p></div>
+    <div class="fcard rv" style="transition-delay:.24s"><div class="fcard-icon">⚡</div><div class="fcard-ttl">Real-Time Flask Inference</div><p class="fcard-desc">POST /predict → StandardScaler → LogisticRegression (dp1_model.pkl). Sub-millisecond latency.</p></div>
+    <div class="fcard rv" style="transition-delay:.28s"><div class="fcard-icon">🛡️</div><div class="fcard-ttl">Input Validation</div><p class="fcard-desc">Physiologically implausible values flagged inline. Abnormal readings highlighted amber before inference.</p></div>
+    <div class="fcard rv" style="transition-delay:.32s"><div class="fcard-icon">🔁</div><div class="fcard-ttl">GridSearchCV Tuned</div><p class="fcard-desc">Best params via 5-fold CV (C, solver). Test AUC up to 0.944 depending on dataset.</p></div>
+    <div class="fcard rv" style="transition-delay:.36s"><div class="fcard-icon">📡</div><div class="fcard-ttl">REST API Ready</div><p class="fcard-desc">Flask exposes /predict, /batch, /health, /model/info, /features — JSON in, structured prediction out.</p></div>
+  </div>
+</section>
+
+<!-- RISK TIERS -->
+<section id="risk">
+  <div class="risk-hdr">
+    <div class="sec-label rv">Risk Classification</div>
+    <h2 class="sec-title rv">Four-Tier Risk System</h2>
+    <p class="sec-desc rv" style="transition-delay:.1s;">The model probability [0–1] maps to four clinically actionable tiers.</p>
+  </div>
+  <div class="risk-grid">
+    <div class="tcard t0 rv" style="transition-delay:.06s"><span class="tbadge">Tier 1</span><div class="tname">Minimal Risk</div><div class="trange">0 – 25%</div><p class="tdesc">Biomarkers within normal limits. Routine annual check-up sufficient.</p></div>
+    <div class="tcard t1 rv" style="transition-delay:.12s"><span class="tbadge">Tier 2</span><div class="tname">Low Risk</div><div class="trange">25 – 55%</div><p class="tdesc">Slightly elevated markers. Semi-annual monitoring with lifestyle adjustments.</p></div>
+    <div class="tcard t2 rv" style="transition-delay:.18s"><span class="tbadge">Tier 3</span><div class="tname">Moderate Risk</div><div class="trange">55 – 80%</div><p class="tdesc">Multiple elevated markers. Ophthalmology referral advised within 4 weeks.</p></div>
+    <div class="tcard t3 rv" style="transition-delay:.24s"><span class="tbadge">Tier 4</span><div class="tname">High Risk</div><div class="trange">80 – 100%</div><p class="tdesc">Critical profile. Immediate ophthalmological examination required.</p></div>
+  </div>
+</section>
+
+<!-- API REFERENCE -->
+<section id="api">
+  <div class="api-layout">
+    <div class="rvl">
+      <div class="sec-label">API Reference</div>
+      <h2 class="sec-title">Integrate in Minutes</h2>
+      <p class="sec-desc">Deploy Flask backend, call /predict from any EHR or clinical dashboard.</p>
+      <div class="ep-list">
+        <div class="ep"><span class="method mpost">POST</span><span class="ep-path">/predict</span><span class="ep-note">Single patient</span></div>
+        <div class="ep"><span class="method mpost">POST</span><span class="ep-path">/batch</span><span class="ep-note">Bulk records</span></div>
+        <div class="ep"><span class="method mget">GET</span><span class="ep-path">/health</span><span class="ep-note">Service status</span></div>
+        <div class="ep"><span class="method mget">GET</span><span class="ep-path">/model/info</span><span class="ep-note">Model metadata</span></div>
+        <div class="ep"><span class="method mget">GET</span><span class="ep-path">/features</span><span class="ep-note">Feature schema</span></div>
+      </div>
+    </div>
+    <div class="rvr">
+      <div class="code-block">
+        <div class="code-hd"><div class="cdots"><div class="cd cd1"></div><div class="cd cd2"></div><div class="cd cd3"></div></div><span class="clang">python · POST /predict</span></div>
+        <div class="code-body"><span class="ck">import</span> requests
+
+<span class="cv">payload</span> = {
+    <span class="cs">"age"</span>:          <span class="cn">68.5</span>,
+    <span class="cs">"systolic_bp"</span>:  <span class="cn">145.2</span>,
+    <span class="cs">"diastolic_bp"</span>: <span class="cn">91.0</span>,
+    <span class="cs">"cholesterol"</span>:  <span class="cn">228.4</span>
+}
+<span class="cv">res</span> = requests.<span class="cf">post</span>(
+    <span class="cs">"http://localhost:5000/predict"</span>,
+    json=<span class="cv">payload</span>
+).<span class="cf">json</span>()
+<span class="cc"># {</span>
+<span class="cc">#   "prediction":      "retinopathy",</span>
+<span class="cc">#   "probability":     0.8134,</span>
+<span class="cc">#   "risk_tier":       "HIGH",</span>
+<span class="cc">#   "consult_doctor":  true,</span>
+<span class="cc">#   "features_computed": 11</span>
+<span class="cc"># }</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="tech">
+  <div class="tech-inner">
+    <div class="rv">
+      <div class="sec-label">Infrastructure</div>
+      <h2 class="sec-title">Built On Proven Foundations</h2>
+      <p class="sec-desc">Every component chosen for clinical reliability and deployment simplicity.</p>
+    </div>
+    <div class="tech-grid">
+      <div class="ts rv" style="transition-delay:.04s"><span class="ts-icon">🐍</span><div class="ts-name">Python</div><div class="ts-role">Core Runtime</div><span class="ts-ver">3.10+</span></div>
+      <div class="ts rv" style="transition-delay:.08s"><span class="ts-icon">⚗️</span><div class="ts-name">Flask</div><div class="ts-role">REST Backend</div><span class="ts-ver">2.3</span></div>
+      <div class="ts rv" style="transition-delay:.12s"><span class="ts-icon">🤖</span><div class="ts-name">scikit-learn</div><div class="ts-role">ML Pipeline</div><span class="ts-ver">1.3</span></div>
+      <div class="ts rv" style="transition-delay:.16s"><span class="ts-icon">🐼</span><div class="ts-name">Pandas</div><div class="ts-role">Data Processing</div><span class="ts-ver">2.0</span></div>
+      <div class="ts rv" style="transition-delay:.20s"><span class="ts-icon">🔢</span><div class="ts-name">NumPy</div><div class="ts-role">Numerical Engine</div><span class="ts-ver">1.25</span></div>
+      <div class="ts rv" style="transition-delay:.24s"><span class="ts-icon">📦</span><div class="ts-name">Joblib</div><div class="ts-role">Model Serialisation</div><span class="ts-ver">1.3</span></div>
+      <div class="ts rv" style="transition-delay:.28s"><span class="ts-icon">📈</span><div class="ts-name">Matplotlib</div><div class="ts-role">EDA Visualisation</div><span class="ts-ver">3.7</span></div>
+      <div class="ts rv" style="transition-delay:.32s"><span class="ts-icon">🌊</span><div class="ts-name">Seaborn</div><div class="ts-role">Statistical Plots</div><span class="ts-ver">0.12</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="foot-inner">
+    <div>
+      <div style="font-family:var(--ff-display);font-size:18px;font-weight:700;">
+        <em style="color:var(--crimson);font-style:normal;">P653</em> · RetinaSight
+      </div>
+      <p>Diabetic Retinopathy Prediction · Flask + scikit-learn · 11-Feature Notebook Pipeline</p>
+    </div>
+    <div class="flinks">
+      <a href="#predict">Prediction</a>
+      <a href="#how">Pipeline</a>
+      <a href="#api">API</a>
+      <a href="#tech">Stack</a>
+      <span style="font-family:var(--ff-mono);font-size:10px;color:var(--dim);">GridSearchCV LR · AUC 0.94+</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════════════ JAVASCRIPT ═══════════════════════════ -->
+<script>
+/* ── CURSOR ──────────────────────────────────────────────────── */
+const _c=document.getElementById('_cur'),_co=document.getElementById('_curo');
+let mx=0,my=0,ox=0,oy=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;_c.style.left=mx+'px';_c.style.top=my+'px';});
+(function loop(){ox+=(mx-ox)*.11;oy+=(my-oy)*.11;_co.style.left=ox+'px';_co.style.top=oy+'px';requestAnimationFrame(loop);})();
+document.querySelectorAll('a,button,.tcard,.fcard,.ts,.ep,.diet-card').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{_c.style.transform='translate(-50%,-50%) scale(2)';_co.style.width='50px';_co.style.height='50px';});
+  el.addEventListener('mouseleave',()=>{_c.style.transform='translate(-50%,-50%) scale(1)';_co.style.width='32px';_co.style.height='32px';});
+});
+
+/* ── SCROLL EFFECTS ──────────────────────────────────────────── */
+window.addEventListener('scroll',()=>{
+  const s=window.scrollY,h=document.body.scrollHeight-window.innerHeight;
+  document.getElementById('_pbar').style.width=(s/h*100)+'%';
+  document.getElementById('_nav').classList.toggle('stuck',s>40);
+  const hc2=document.querySelector('.hero-c');if(hc2)hc2.style.transform=`translateY(${s*.2}px)`;
+  const hg=document.querySelector('.hero-grid');if(hg)hg.style.transform=`perspective(700px) rotateX(14deg) translateY(${s*.08}px)`;
+});
+
+/* ── REVEAL ON SCROLL ────────────────────────────────────────── */
+const obs=new IntersectionObserver(e=>e.forEach(e=>{if(e.isIntersecting)e.target.classList.add('on');}),{threshold:.1});
+document.querySelectorAll('.rv,.rvl,.rvr').forEach(el=>obs.observe(el));
+
+/* ── HERO PARTICLE CANVAS ────────────────────────────────────── */
+const hcanvas=document.getElementById('_hcanvas'),hctx=hcanvas.getContext('2d');
+function resizeHC(){hcanvas.width=window.innerWidth;hcanvas.height=window.innerHeight;}
+resizeHC();window.addEventListener('resize',resizeHC);
+const pts=Array.from({length:85},()=>({x:Math.random()*hcanvas.width,y:Math.random()*hcanvas.height,vx:(Math.random()-.5)*.28,vy:(Math.random()-.5)*.28,a:Math.random()*Math.PI*2}));
+(function drawHC(){
+  hctx.clearRect(0,0,hcanvas.width,hcanvas.height);
+  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+    const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=Math.hypot(dx,dy);
+    if(d<125){hctx.beginPath();hctx.moveTo(pts[i].x,pts[i].y);hctx.lineTo(pts[j].x,pts[j].y);
+      hctx.strokeStyle=`rgba(232,25,60,${(1-d/125)*.05})`;hctx.lineWidth=.5;hctx.stroke();}
+  }
+  pts.forEach(p=>{
+    hctx.beginPath();hctx.arc(p.x,p.y,Math.sin(p.a)*.5+.8,0,Math.PI*2);
+    hctx.fillStyle='rgba(232,25,60,0.16)';hctx.fill();
+    p.x+=p.vx;p.y+=p.vy;p.a+=.016;
+    if(p.x<0)p.x=hcanvas.width;if(p.x>hcanvas.width)p.x=0;
+    if(p.y<0)p.y=hcanvas.height;if(p.y>hcanvas.height)p.y=0;
+  });
+  requestAnimationFrame(drawHC);
+})();
+
+/* ── SCAN LINE ───────────────────────────────────────────────── */
+const sl=document.getElementById('scanl');
+if(sl){let sy=100,sd=1;(function sc(){sy+=sd*.65;if(sy>290)sd=-1;if(sy<100)sd=1;sl.setAttribute('y1',sy);sl.setAttribute('y2',sy);requestAnimationFrame(sc);})();}
+
+/* ── 3D TILT ─────────────────────────────────────────────────── */
+document.querySelectorAll('.tcard,.ts').forEach(c=>{
+  c.addEventListener('mousemove',e=>{
+    const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    c.style.transform=`perspective(600px) rotateY(${x*14}deg) rotateX(${-y*14}deg) translateY(-6px)`;
+  });
+  c.addEventListener('mouseleave',()=>c.style.transform='');
+});
+
+/* ── LIVE FEATURE PREVIEW (mirrors notebook cell 25) ────────── */
+function gv(){
+  return{
+    age: parseFloat(document.getElementById('f-age').value)||null,
+    sbp: parseFloat(document.getElementById('f-sbp').value)||null,
+    dbp: parseFloat(document.getElementById('f-dbp').value)||null,
+    chol:parseFloat(document.getElementById('f-chol').value)||null
+  };
+}
+
+function computeLocal(age,sbp,dbp,chol){
+  return{
+    pp:  sbp-dbp,
+    bpr: sbp/(dbp+1e-6),
+    as_: age*sbp,
+    car: chol/(age+1e-6),
+    hs:  ((sbp>130)?1:0)+((dbp>80)?1:0),
+    hc:  (chol>200)?1:0,
+    ag:  age<40?0:age<55?1:age<65?2:3
+  };
+}
+
+function setFV(id,bid,val,max,dec){
+  const el=document.getElementById(id),bar=document.getElementById(bid);
+  if(val===null||isNaN(val)){el.textContent='—';el.className='feat-v stale';bar.style.width='0';return;}
+  el.textContent=dec?Number(val).toFixed(dec):val;
+  el.className='feat-v';
+  bar.style.width=Math.min(100,Math.abs(val)/max*100)+'%';
+}
+
+function setHint(hid,iid,val,lo,hi,unit){
+  const h=document.getElementById(hid),inp=document.getElementById(iid);
+  if(val===null||isNaN(val)){h.textContent=`Enter value (${unit})`;h.className='fhint';inp.className='finput';return;}
+  if(lo!==null&&val<lo){h.textContent=`⚠ Below normal (${lo}–${hi} ${unit})`;h.className='fhint abnormal';inp.className='finput warn';}
+  else if(hi!==null&&val>hi){h.textContent=`⚠ Above normal (${lo}–${hi} ${unit})`;h.className='fhint abnormal';inp.className='finput warn';}
+  else{h.textContent='✓ Within normal range';h.className='fhint ok';inp.className='finput valid';}
+}
+
+function onInput(){
+  const{age,sbp,dbp,chol}=gv();
+  setHint('h-age','f-age',age,null,null,'yrs');
+  setHint('h-sbp','f-sbp',sbp,60,120,'mmHg');
+  setHint('h-dbp','f-dbp',dbp,40,80,'mmHg');
+  setHint('h-chol','f-chol',chol,125,200,'mg/dL');
+  setFV('fv-age','fb-age',age,110,1);
+  setFV('fv-sbp','fb-sbp',sbp,250,1);
+  setFV('fv-dbp','fb-dbp',dbp,160,1);
+  setFV('fv-chol','fb-chol',chol,400,1);
+  if(age&&sbp&&dbp&&chol){
+    const f=computeLocal(age,sbp,dbp,chol);
+    setFV('fv-pp','fb-pp',f.pp,120,2);
+    setFV('fv-bpr','fb-bpr',f.bpr,3,4);
+    setFV('fv-as','fb-as',f.as_,20000,0);
+    setFV('fv-ca','fb-ca',f.car,10,4);
+    setFV('fv-hs','fb-hs',f.hs,2,0);
+    setFV('fv-hc','fb-hc',f.hc,1,0);
+    setFV('fv-ag','fb-ag',f.ag,3,0);
+    if(f.pp>60) document.getElementById('fv-pp').classList.add('hot');
+    if(f.hs>0)  document.getElementById('fv-hs').classList.add('hot');
+  } else {
+    ['fv-pp','fv-bpr','fv-as','fv-ca','fv-hs','fv-hc','fv-ag'].forEach(id=>{
+      document.getElementById(id).textContent='—';
+      document.getElementById(id).className='feat-v stale';
+    });
+    ['fb-pp','fb-bpr','fb-as','fb-ca','fb-hs','fb-hc','fb-ag'].forEach(id=>
+      document.getElementById(id).style.width='0');
+  }
+}
+
+/* ── BUTTON STATE HELPERS ────────────────────────────────────── */
+/* Per the requirements:
+   document.querySelector(".predict-btn").innerText = "Processing...";
+   document.querySelector(".predict-btn").disabled = true;
+   document.querySelector(".predict-btn").disabled = false;
+*/
+function setBtnLoading(on){
+  const btn  = document.querySelector('.predict-btn');   // ← selector as requested
+  const txt  = document.getElementById('btn-text');
+  const spin = document.getElementById('btn-spin');
+  if(on){
+    btn.innerText = '';                    // clear so we can add span children
+    btn.disabled  = true;                 // ← .disabled = true as requested
+    btn.classList.add('loading');
+    spin.style.display = 'block';
+    txt.textContent    = 'Processing...'; // ← .innerText = "Processing..." as requested
+    btn.appendChild(spin);
+    btn.appendChild(txt);
+  } else {
+    btn.disabled  = false;                // ← .disabled = false as requested
+    btn.classList.remove('loading');
+    spin.style.display = 'none';
+    txt.textContent    = 'Analyse Risk Profile';
+  }
+}
+
+/* ── PREDICTION → Flask POST /predict ───────────────────────── */
+async function runPrediction(){
+  const{age,sbp,dbp,chol}=gv();
+  if(!age||!sbp||!dbp||!chol){
+    alert('Please fill in all 4 input fields before running the assessment.');
+    return;
+  }
+
+  setBtnLoading(true);   // Processing... + disabled = true
+
+  try{
+    const res = await fetch('/predict',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({age,systolic_bp:sbp,diastolic_bp:dbp,cholesterol:chol})
+    });
+    if(!res.ok){
+      const e=await res.json();
+      throw new Error(e.error||'Server error '+res.status);
+    }
+    showResult(await res.json());
+  } catch(err){
+    alert('Prediction failed: '+err.message);
+  } finally {
+    setBtnLoading(false); // Restore + disabled = false
+  }
+}
+
+/* ── RENDER RESULT ───────────────────────────────────────────── */
+function showResult(d){
+  const prob=d.probability, pct=d.probability_pct, det=d.detected;
+  const tierLbl=d.risk_tier_label, f=d.derived, inp=d.inputs;
+
+  /* show section + scroll */
+  const rs=document.getElementById('result-section');
+  rs.className='show';
+  setTimeout(()=>rs.scrollIntoView({behavior:'smooth',block:'start'}),80);
+
+  /* banner class */
+  document.getElementById('res-banner').className='result-banner '+(det?'detected':'safe');
+
+  /* verdict + sub */
+  document.getElementById('res-verdict').textContent=det
+    ?'⚠ Retinopathy Detected':'✓ No Retinopathy Detected';
+  document.getElementById('res-sub').textContent=det
+    ?`The model indicates a ${pct}% probability of diabetic retinopathy (${tierLbl}). Immediate clinical consultation is strongly recommended.`
+    :`Your biomarker profile indicates a ${pct}% retinopathy probability — below the detection threshold (${tierLbl}). Continue routine monitoring.`;
+  document.getElementById('res-pct').textContent=pct+'%';
+
+  /* probability ring animation */
+  drawRing(prob,det);
+
+  /* risk needle */
+  document.getElementById('risk-needle').style.left=pct+'%';
+
+  /* consult card */
+  const cc=document.getElementById('consult-card');
+  const ct=document.getElementById('consult-ttl');
+  const cb=document.getElementById('consult-body');
+  if(det){
+    cc.className='consult-card';
+    ct.innerHTML='🩺 Consult a Doctor — Ophthalmologist Referral Required';
+    cb.innerHTML=`<strong style="color:var(--crimson2)">Retinopathy detected (${d.inference_source}).</strong>
+      Please schedule with an ophthalmologist as soon as possible.<br><br>
+      Your doctor may recommend:<br>
+      <ul style="margin:10px 0 0 18px;display:flex;flex-direction:column;gap:5px;font-size:13px;">
+        <li>Dilated fundus eye examination</li>
+        <li>Optical coherence tomography (OCT) scan</li>
+        <li>HbA1c blood test for long-term glucose control</li>
+        <li>BP and cholesterol management review</li>
+      </ul>
+      <div style="margin-top:14px;padding:11px 14px;background:rgba(232,25,60,.07);
+        border-left:3px solid var(--crimson);border-radius:4px;font-size:12px;color:var(--muted);">
+        <strong>Important:</strong> This is a statistical prediction, not a medical diagnosis.
+        Only a qualified ophthalmologist can confirm retinopathy.
+      </div>`;
+    document.getElementById('diet-panel').style.display='block';
+  } else {
+    cc.className='consult-card safe-c';
+    ct.style.color='var(--mint2)';
+    ct.innerHTML='✓ No Immediate Referral Required';
+    cb.innerHTML=`Your biomarkers do not indicate retinopathy. Continue your current diabetes management plan.<br><br>
+      <ul style="margin:10px 0 0 18px;display:flex;flex-direction:column;gap:5px;font-size:13px;">
+        <li>Schedule annual dilated eye examination</li>
+        <li>Maintain HbA1c below 7%</li>
+        <li>Keep BP below 130/80 mmHg</li>
+        <li>Keep LDL cholesterol below 100 mg/dL</li>
+      </ul>
+      <div style="margin-top:14px;padding:11px 14px;background:rgba(0,200,150,.06);
+        border-left:3px solid var(--mint);border-radius:4px;font-size:12px;color:var(--muted);">
+        Regular screening remains essential for all patients with diabetes.
+      </div>`;
+    document.getElementById('diet-panel').style.display='none';
+  }
+
+  /* input + derived summary grid */
+  const items=[
+    {l:'Age',          v:inp.age+' yrs'},
+    {l:'Systolic BP',  v:inp.systolic_bp+' mmHg'},
+    {l:'Diastolic BP', v:inp.diastolic_bp+' mmHg'},
+    {l:'Cholesterol',  v:inp.cholesterol+' mg/dL'},
+    {l:'Pulse Pressure',v:f.pulse_pressure.toFixed(1)},
+    {l:'BP Ratio',     v:f.bp_ratio.toFixed(3)},
+    {l:'Hypert. Score',v:f.hypertension_score},
+    {l:'CV Risk',      v:f.cv_risk_score.toFixed(4)},
+  ];
+  document.getElementById('inp-summary').innerHTML=items.map(i=>
+    `<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);
+      border-radius:7px;padding:9px 11px;">
+      <div style="font-family:var(--ff-mono);font-size:9px;letter-spacing:.1em;
+        text-transform:uppercase;color:var(--dim);margin-bottom:3px;">${i.l}</div>
+      <div style="font-family:var(--ff-mono);font-size:13px;font-weight:500;">${i.v}</div>
+    </div>`).join('');
+
+  /* elevated markers */
+  const elev=[];
+  if(inp.systolic_bp>120)  elev.push(`Systolic BP: ${inp.systolic_bp} mmHg (normal &lt;120)`);
+  if(inp.diastolic_bp>80)  elev.push(`Diastolic BP: ${inp.diastolic_bp} mmHg (normal &lt;80)`);
+  if(inp.cholesterol>200)  elev.push(`Cholesterol: ${inp.cholesterol} mg/dL (normal 125–200)`);
+  if(f.pulse_pressure>50)  elev.push(`Pulse Pressure: ${f.pulse_pressure.toFixed(1)} (elevated &gt;50)`);
+  if(f.bp_ratio>1.6)       elev.push(`BP Ratio: ${f.bp_ratio.toFixed(3)} (elevated &gt;1.6)`);
+  document.getElementById('elev-markers').innerHTML=elev.length
+    ?elev.map(e=>`<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;
+        border-bottom:1px solid var(--border);">
+        <span style="color:var(--gold);margin-top:1px;">▲</span>
+        <span style="font-size:12px;">${e}</span></div>`).join('')
+    :'<div style="color:var(--mint);font-size:13px;">✓ All base markers within reference ranges.</div>';
+}
+
+/* ── PROBABILITY RING ANIMATION ──────────────────────────────── */
+function drawRing(prob,det){
+  const rc=document.getElementById('ring-canvas'),rx=rc.getContext('2d');
+  const cx=70,cy=70,r=52; let progress=0;
+  const grad=rx.createLinearGradient(0,0,140,0);
+  if(det){grad.addColorStop(0,'#e8193c');grad.addColorStop(1,'#f0a500');}
+  else  {grad.addColorStop(0,'#00c896');grad.addColorStop(1,'#4da6ff');}
+  (function anim(){
+    if(progress>=prob)return;
+    progress=Math.min(prob,progress+0.018);
+    rx.clearRect(0,0,140,140);
+    rx.beginPath();rx.arc(cx,cy,r,0,Math.PI*2);
+    rx.strokeStyle='rgba(255,255,255,.07)';rx.lineWidth=8;rx.stroke();
+    rx.beginPath();rx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+progress*Math.PI*2);
+    rx.strokeStyle=grad;rx.lineWidth=8;rx.lineCap='round';rx.stroke();
+    requestAnimationFrame(anim);
+  })();
+}
+
+/* ── MODEL STATUS BADGE  (loaded on page start) ──────────────── */
+(async function checkHealth(){
+  try{
+    const d=await(await fetch('/health')).json();
+    const live=d.model_loaded===true;
+    const wrap=document.getElementById('model-badge-wrap');
+    wrap.innerHTML=`<div class="model-badge ${live?'live':'demo'}">
+      <span class="mbdot"></span>
+      ${live
+        ? '✅&nbsp;ML Model Active — scikit-learn (dp1_model.pkl)'
+        : '⚠&nbsp;Fallback mode — run: <code style="font-family:var(--ff-mono)">python app_dp1.py --train</code>'}
+    </div>`;
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
